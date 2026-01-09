@@ -1,0 +1,45 @@
+# =====================================================
+# Airline Ticketing System - Configuration
+# =====================================================
+# Copy this file to .env and fill in your values
+# =====================================================
+
+# AWS Cognito Configuration
+# Create a User Pool in AWS Cognito and get these values
+AWS_REGION=eu-west-1
+AWS_COGNITO_USER_POOL_ID=eu-west-1_XXXXXXXXX
+AWS_COGNITO_CLIENT_ID=xxxxxxxxxxxxxxxxxxxxxxxxxx
+
+# Database (for local development, Docker Compose uses defaults)
+DATABASE_URL=postgresql://airline_user:airline_pass_2024@localhost:5432/airline_db
+
+# Redis (for local development)
+REDIS_URL=redis://localhost:6379
+
+# RabbitMQ (for local development)
+RABBITMQ_URL=amqp://airline_mq:airline_mq_pass@localhost:5672
+
+# Email Configuration (Gmail SMTP)
+# For Gmail, you need to create an App Password:
+# 1. Go to Google Account > Security > 2-Step Verification
+# 2. At the bottom, select "App passwords"
+# 3. Generate a new app password for "Mail"
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your-email@gmail.com
+SMTP_PASS=your-app-password
+
+# Service Ports (for local development)
+FLIGHT_SERVICE_PORT=3001
+MILESSMILES_SERVICE_PORT=3002
+NOTIFICATION_SERVICE_PORT=3003
+ML_SERVICE_PORT=5000
+API_GATEWAY_PORT=3000
+ADMIN_PORTAL_PORT=3010
+USER_PORTAL_PORT=3011
+
+# Frontend API URLs (for production)
+VITE_API_URL=https://api.airline.example.com/api/v1
+
+# Allowed Origins (for CORS)
+ALLOWED_ORIGINS=http://localhost:3010,http://localhost:3011

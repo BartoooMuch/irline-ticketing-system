@@ -1,0 +1,34 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --turkish-red: #c41e3a;
+  --turkish-dark: #8b0000;
+}
+
+body {
+  font-family: 'DM Sans', system-ui, sans-serif;
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-turkish-red hover:bg-turkish-dark text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200;
+  }
+  
+  .btn-secondary {
+    @apply bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded-lg transition-colors duration-200;
+  }
+  
+  .btn-outline {
+    @apply border-2 border-turkish-red text-turkish-red hover:bg-turkish-red hover:text-white font-semibold py-2 px-4 rounded-lg transition-colors duration-200;
+  }
+  
+  .input-field {
+    @apply w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-turkish-red focus:border-transparent outline-none transition-all duration-200;
+  }
+  
+  .card {
+    @apply bg-white rounded-xl shadow-sm border border-gray-100 p-6;
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "name": "airline-ticketing-system",
+  "version": "1.0.0",
+  "description": "SE 4458 Final Project - Airline Ticketing System",
+  "private": true,
+  "workspaces": [
+    "services/*",
+    "frontend/*",
+    "api-gateway"
+  ],
+  "scripts": {
+    "install:all": "npm install && npm run install:services && npm run install:frontend",
+    "install:services": "cd services/flight-service && npm install && cd ../notification-service && npm install && cd ../milessmiles-service && npm install",
+    "install:frontend": "cd frontend/admin-portal && npm install && cd ../user-portal && npm install",
+    "dev:flight": "cd services/flight-service && npm run dev",
+    "dev:notification": "cd services/notification-service && npm run dev",
+    "dev:milessmiles": "cd services/milessmiles-service && npm run dev",
+    "dev:gateway": "cd api-gateway && npm run dev",
+    "dev:admin": "cd frontend/admin-portal && npm run dev",
+    "dev:user": "cd frontend/user-portal && npm run dev",
+    "dev:ml": "cd services/ml-service && python app.py",
+    "docker:build": "docker-compose build",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down"
+  },
+  "keywords": [
+    "airline",
+    "ticketing",
+    "microservices"
+  ],
+  "author": "SE 4458 Group 1",
+  "license": "MIT"
+}

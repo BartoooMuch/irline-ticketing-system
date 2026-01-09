@@ -1,0 +1,208 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: airline-postgres
+    environment:
+      POSTGRES_USER: airline_user
+      POSTGRES_PASSWORD: airline_pass_2024
+      POSTGRES_DB: airline_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - airline-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airline_user -d airline_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: airline-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - airline-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # RabbitMQ Message Queue
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: airline-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: airline_mq
+      RABBITMQ_DEFAULT_PASS: airline_mq_pass
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - airline-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # API Gateway
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    container_name: airline-api-gateway
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - FLIGHT_SERVICE_URL=http://flight-service:3001
+      - MILESSMILES_SERVICE_URL=http://milessmiles-service:3002
+      - NOTIFICATION_SERVICE_URL=http://notification-service:3003
+      - ML_SERVICE_URL=http://ml-service:5000
+    depends_on:
+      - flight-service
+      - milessmiles-service
+      - notification-service
+      - ml-service
+    networks:
+      - airline-network
+
+  # Flight Service
+  flight-service:
+    build:
+      context: ./services/flight-service
+      dockerfile: Dockerfile
+    container_name: airline-flight-service
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - DATABASE_URL=postgresql://airline_user:airline_pass_2024@postgres:5432/airline_db
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://airline_mq:airline_mq_pass@rabbitmq:5672
+      - AWS_REGION=${AWS_REGION}
+      - AWS_COGNITO_USER_POOL_ID=${AWS_COGNITO_USER_POOL_ID}
+      - AWS_COGNITO_CLIENT_ID=${AWS_COGNITO_CLIENT_ID}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - airline-network
+
+  # MilesSmiles Service
+  milessmiles-service:
+    build:
+      context: ./services/milessmiles-service
+      dockerfile: Dockerfile
+    container_name: airline-milessmiles-service
+    ports:
+      - "3002:3002"
+    environment:
+      - NODE_ENV=production
+      - PORT=3002
+      - DATABASE_URL=postgresql://airline_user:airline_pass_2024@postgres:5432/airline_db
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://airline_mq:airline_mq_pass@rabbitmq:5672
+      - AWS_REGION=${AWS_REGION}
+      - AWS_COGNITO_USER_POOL_ID=${AWS_COGNITO_USER_POOL_ID}
+      - AWS_COGNITO_CLIENT_ID=${AWS_COGNITO_CLIENT_ID}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - airline-network
+
+  # Notification Service
+  notification-service:
+    build:
+      context: ./services/notification-service
+      dockerfile: Dockerfile
+    container_name: airline-notification-service
+    ports:
+      - "3003:3003"
+    environment:
+      - NODE_ENV=production
+      - PORT=3003
+      - DATABASE_URL=postgresql://airline_user:airline_pass_2024@postgres:5432/airline_db
+      - RABBITMQ_URL=amqp://airline_mq:airline_mq_pass@rabbitmq:5672
+      - SMTP_HOST=smtp.gmail.com
+      - SMTP_PORT=587
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - airline-network
+
+  # ML Price Prediction Service
+  ml-service:
+    build:
+      context: ./services/ml-service
+      dockerfile: Dockerfile
+    container_name: airline-ml-service
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=production
+    networks:
+      - airline-network
+
+  # Admin Portal Frontend
+  admin-portal:
+    build:
+      context: ./frontend/admin-portal
+      dockerfile: Dockerfile
+    container_name: airline-admin-portal
+    ports:
+      - "3010:80"
+    depends_on:
+      - api-gateway
+    networks:
+      - airline-network
+
+  # User Portal Frontend
+  user-portal:
+    build:
+      context: ./frontend/user-portal
+      dockerfile: Dockerfile
+    container_name: airline-user-portal
+    ports:
+      - "3011:80"
+    depends_on:
+      - api-gateway
+    networks:
+      - airline-network
+
+volumes:
+  postgres_data:
+  redis_data:
+  rabbitmq_data:
+
+networks:
+  airline-network:
+    driver: bridge
