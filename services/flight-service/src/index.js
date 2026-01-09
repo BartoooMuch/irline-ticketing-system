@@ -20,6 +20,7 @@ const PORT = process.env.PORT || 3001;
 // Database connection
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL?.includes('render.com') ? { rejectUnauthorized: false } : false,
 });
 
 // Redis connection
