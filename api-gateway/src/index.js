@@ -3,7 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
-const { createProxyMiddleware } = require('http-proxy-middleware');
+const axios = require('axios');
 const rateLimit = require('express-rate-limit');
 const winston = require('winston');
 
@@ -72,48 +72,45 @@ app.use(cors({
 app.use(morgan('combined', { stream: { write: (message) => logger.info(message.trim()) } }));
 app.use(limiter);
 
-// Buffer raw body for proxy routes
-// This allows us to manually forward the body without stream conflicts
-app.use((req, res, next) => {
-  if (req.path.startsWith('/api/v1/')) {
-    // For API routes, buffer raw body for POST/PUT/PATCH
-    if (['POST', 'PUT', 'PATCH'].includes(req.method)) {
-      const chunks = [];
-      req.on('data', (chunk) => chunks.push(chunk));
-      req.on('end', () => {
-        req.rawBody = Buffer.concat(chunks);
-        next();
-      });
-      req.on('error', (err) => {
-        logger.error(`Error buffering body: ${err.message}`);
-        res.status(400).json({
-          success: false,
-          error: { message: 'Invalid request body', code: 'INVALID_BODY' },
-        });
-      });
-    } else {
-      // GET/HEAD/etc don't have body
-      req.rawBody = null;
-      next();
-    }
-  } else {
-    // For non-API routes, use normal JSON parsing
-    const jsonParser = express.json({ limit: '10mb' });
-    jsonParser(req, res, next);
-  }
-});
+// Parse JSON body for all routes
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Proxy options factory
-const createProxyOptions = (target, pathRewrite = {}) => ({
-  target,
-  changeOrigin: true,
-  pathRewrite,
-  // Don't let http-proxy-middleware parse body
-  bodyParser: false,
-  // Don't buffer - we handle it manually
-  buffer: false,
-  onError: (err, req, res) => {
-    logger.error(`Proxy error: ${err.message}`);
+// Manual proxy middleware using axios
+const proxyTo = (serviceKey) => async (req, res) => {
+  const targetUrl = SERVICES[serviceKey];
+  const fullUrl = `${targetUrl}${req.path}`;
+  
+  try {
+    logger.info(`Proxying ${req.method} ${req.originalUrl} -> ${fullUrl}`);
+    
+    const axiosConfig = {
+      method: req.method,
+      url: fullUrl,
+      params: req.query,
+      headers: {
+        ...req.headers,
+        host: new URL(targetUrl).host,
+      },
+      timeout: 30000,
+      validateStatus: () => true, // Accept any status
+    };
+    
+    // Forward body for POST/PUT/PATCH
+    if (['POST', 'PUT', 'PATCH'].includes(req.method) && req.body) {
+      axiosConfig.data = req.body;
+    }
+    
+    const response = await axios(axiosConfig);
+    
+    // Forward response
+    res.status(response.status);
+    Object.keys(response.headers).forEach(key => {
+      res.setHeader(key, response.headers[key]);
+    });
+    res.send(response.data);
+  } catch (error) {
+    logger.error(`Proxy error: ${error.message}`);
     res.status(502).json({
       success: false,
       error: {
@@ -121,31 +118,8 @@ const createProxyOptions = (target, pathRewrite = {}) => ({
         code: 'SERVICE_UNAVAILABLE',
       },
     });
-  },
-  onProxyReq: (proxyReq, req, res) => {
-    // Forward headers
-    if (req.headers.authorization) {
-      proxyReq.setHeader('Authorization', req.headers.authorization);
-    }
-    if (req.headers['x-api-key']) {
-      proxyReq.setHeader('x-api-key', req.headers['x-api-key']);
-    }
-    if (req.headers['x-api-secret']) {
-      proxyReq.setHeader('x-api-secret', req.headers['x-api-secret']);
-    }
-    
-    // Forward raw body if it exists
-    if (req.rawBody && req.rawBody.length > 0 && ['POST', 'PUT', 'PATCH'].includes(req.method)) {
-      proxyReq.setHeader('Content-Type', req.headers['content-type'] || 'application/json');
-      proxyReq.setHeader('Content-Length', req.rawBody.length);
-      proxyReq.write(req.rawBody);
-      proxyReq.end();
-    }
-    
-    // Log request
-    logger.info(`Proxying ${req.method} ${req.originalUrl} -> ${target}`);
-  },
-});
+  }
+};
 
 // =====================
 // API Routes
@@ -162,61 +136,20 @@ app.get('/health', (req, res) => {
 });
 
 // Flight Service Routes
-app.use(
-  '/api/v1/flights',
-  createProxyMiddleware(createProxyOptions(SERVICES.flight, {
-    '^/api/v1/flights': '/api/v1/flights',
-  }))
-);
-
-app.use(
-  '/api/v1/tickets',
-  createProxyMiddleware(createProxyOptions(SERVICES.flight, {
-    '^/api/v1/tickets': '/api/v1/tickets',
-  }))
-);
-
-app.use(
-  '/api/v1/airports',
-  createProxyMiddleware(createProxyOptions(SERVICES.flight, {
-    '^/api/v1/airports': '/api/v1/airports',
-  }))
-);
+app.all('/api/v1/flights*', proxyTo('flight'));
+app.all('/api/v1/tickets*', proxyTo('flight'));
+app.all('/api/v1/airports*', proxyTo('flight'));
 
 // MilesSmiles Service Routes
-app.use(
-  '/api/v1/auth',
-  authLimiter,
-  createProxyMiddleware(createProxyOptions(SERVICES.milessmiles, {
-    '^/api/v1/auth': '/api/v1/auth',
-  }))
-);
-
-app.use(
-  '/api/v1/members',
-  createProxyMiddleware(createProxyOptions(SERVICES.milessmiles, {
-    '^/api/v1/members': '/api/v1/members',
-  }))
-);
-
-app.use(
-  '/api/v1/miles',
-  createProxyMiddleware(createProxyOptions(SERVICES.milessmiles, {
-    '^/api/v1/miles': '/api/v1/miles',
-  }))
-);
+app.all('/api/v1/auth*', authLimiter, proxyTo('milessmiles'));
+app.all('/api/v1/members*', proxyTo('milessmiles'));
+app.all('/api/v1/miles*', proxyTo('milessmiles'));
 
 // ML Service Routes
-app.use(
-  '/api/v1/predict',
-  createProxyMiddleware(createProxyOptions(SERVICES.ml, {
-    '^/api/v1/predict': '/predict',
-  }))
-);
+app.all('/api/v1/predict*', proxyTo('ml'));
 
 // Service health endpoints
 app.get('/api/v1/services/health', async (req, res) => {
-  const axios = require('axios');
   const healthChecks = {};
   
   for (const [name, url] of Object.entries(SERVICES)) {
