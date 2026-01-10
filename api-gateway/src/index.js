@@ -70,13 +70,19 @@ app.use(cors({
 }));
 app.use(morgan('combined', { stream: { write: (message) => logger.info(message.trim()) } }));
 app.use(limiter);
-// Note: Don't use express.json() globally - it breaks proxy forwarding
+
+// Parse JSON body - but only buffer it, don't consume the stream
+// This allows http-proxy-middleware to forward the body automatically
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Proxy options factory
 const createProxyOptions = (target, pathRewrite = {}) => ({
   target,
   changeOrigin: true,
   pathRewrite,
+  // Buffer request body so it can be forwarded
+  buffer: true,
   onError: (err, req, res) => {
     logger.error(`Proxy error: ${err.message}`);
     res.status(502).json({
@@ -87,7 +93,7 @@ const createProxyOptions = (target, pathRewrite = {}) => ({
       },
     });
   },
-  onProxyReq: (proxyReq, req) => {
+  onProxyReq: (proxyReq, req, res) => {
     // Forward headers
     if (req.headers.authorization) {
       proxyReq.setHeader('Authorization', req.headers.authorization);
@@ -97,6 +103,14 @@ const createProxyOptions = (target, pathRewrite = {}) => ({
     }
     if (req.headers['x-api-secret']) {
       proxyReq.setHeader('x-api-secret', req.headers['x-api-secret']);
+    }
+    
+    // If body was parsed by express.json(), we need to forward it manually
+    if (req.body && Object.keys(req.body).length > 0 && ['POST', 'PUT', 'PATCH'].includes(req.method)) {
+      const bodyData = JSON.stringify(req.body);
+      proxyReq.setHeader('Content-Type', 'application/json');
+      proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
+      proxyReq.write(bodyData);
     }
     
     // Log request
