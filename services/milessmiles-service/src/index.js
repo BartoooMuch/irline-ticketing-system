@@ -23,28 +23,34 @@ const pool = new Pool({
   ssl: process.env.DATABASE_URL?.includes('render.com') ? { rejectUnauthorized: false } : false,
 });
 
-// Redis connection
+// Redis connection (optional)
 let redisClient;
 const connectRedis = async () => {
+  if (!process.env.REDIS_URL || process.env.REDIS_URL === 'redis://localhost:6379') {
+    logger.warn('Redis URL not configured, skipping Redis connection');
+    return;
+  }
   try {
     redisClient = createClient({
-      url: process.env.REDIS_URL || 'redis://localhost:6379',
+      url: process.env.REDIS_URL,
     });
-    redisClient.on('error', (err) => logger.error('Redis Client Error', err));
+    redisClient.on('error', (err) => logger.warn('Redis Client Error (non-critical):', err.message));
     await redisClient.connect();
     logger.info('Connected to Redis');
   } catch (error) {
-    logger.error('Failed to connect to Redis:', error);
+    logger.warn('Failed to connect to Redis (continuing without cache):', error.message);
   }
 };
 
-// RabbitMQ connection
+// RabbitMQ connection (optional)
 let rabbitChannel;
 const connectRabbitMQ = async () => {
+  if (!process.env.RABBITMQ_URL || process.env.RABBITMQ_URL === 'amqp://localhost') {
+    logger.warn('RabbitMQ URL not configured, skipping RabbitMQ connection');
+    return;
+  }
   try {
-    const connection = await amqp.connect(
-      process.env.RABBITMQ_URL || 'amqp://localhost'
-    );
+    const connection = await amqp.connect(process.env.RABBITMQ_URL);
     rabbitChannel = await connection.createChannel();
     
     // Declare queues
@@ -53,7 +59,7 @@ const connectRabbitMQ = async () => {
     
     logger.info('Connected to RabbitMQ');
   } catch (error) {
-    logger.error('Failed to connect to RabbitMQ:', error);
+    logger.warn('Failed to connect to RabbitMQ (continuing without queue):', error.message);
   }
 };
 
