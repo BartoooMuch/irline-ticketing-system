@@ -33,6 +33,13 @@ This project implements a Turkish Airlines-like ticketing system with the follow
 
 ### 🌐 Deployed URLs
 
+**Production URLs (Render.com):**
+
+| Service | URL |
+|---------|-----|
+| User Portal | `https://user-portal-xnjc.onrender.com` |
+| Admin Portal | `https://admin-portal-0z68.onrender.com` |
+
 **Local Development URLs:**
 
 | Service | URL | Port |
@@ -47,8 +54,6 @@ This project implements a Turkish Airlines-like ticketing system with the follow
 | RabbitMQ Management | `http://localhost:15672` | 15672 |
 | PostgreSQL | `localhost:5432` | 5432 |
 | Redis | `localhost:6379` | 6379 |
-
-**Note:** For cloud deployment, these services will be deployed to AWS/Azure/Google Cloud. See [Deployment](#-deployment) section for details.
 
 ---
 
@@ -411,7 +416,22 @@ docker-compose logs -f
 
 ## ☁️ Deployment
 
-### AWS Deployment Guide
+### Production Deployment (Render.com)
+
+The system is currently deployed on Render.com with the following services:
+
+- **Frontend Portals**: Admin Portal and User Portal deployed as Static Sites
+- **Backend Services**: API Gateway, Flight Service, MilesSmiles Service, and ML Service deployed as Web Services
+- **Database**: PostgreSQL 15 on Render
+- **Region**: Oregon (US West)
+
+**Deployment URLs:**
+- User Portal: `https://user-portal-xnjc.onrender.com`
+- Admin Portal: `https://admin-portal-0z68.onrender.com`
+
+**Note:** Free tier services may spin down after inactivity. First request may take 30-60 seconds to wake up.
+
+### AWS Deployment Guide (Alternative)
 
 1. **Database**: Use AWS RDS PostgreSQL
 2. **Cache**: Use AWS ElastiCache (Redis)
