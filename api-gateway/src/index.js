@@ -72,16 +72,17 @@ app.use(cors({
 app.use(morgan('combined', { stream: { write: (message) => logger.info(message.trim()) } }));
 app.use(limiter);
 
-// Parse JSON body - needed for proxy routes that modify body
-// http-proxy-middleware will handle forwarding when body is parsed
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+// Don't parse body globally - let http-proxy-middleware handle it for proxy routes
+// Only parse for non-proxy routes if needed (health check, etc.)
+// This prevents stream conflicts when forwarding body to downstream services
 
 // Proxy options factory
 const createProxyOptions = (target, pathRewrite = {}) => ({
   target,
   changeOrigin: true,
   pathRewrite,
+  // Don't parse body - forward raw stream
+  bodyParser: false,
   // Buffer request body so it can be forwarded
   buffer: true,
   onError: (err, req, res) => {
@@ -104,23 +105,6 @@ const createProxyOptions = (target, pathRewrite = {}) => ({
     }
     if (req.headers['x-api-secret']) {
       proxyReq.setHeader('x-api-secret', req.headers['x-api-secret']);
-    }
-    
-    // If body was parsed by express.json(), we need to forward it manually
-    // This prevents http-proxy-middleware from trying to pipe the already-consumed stream
-    if (req.body && Object.keys(req.body).length > 0 && ['POST', 'PUT', 'PATCH'].includes(req.method)) {
-      const bodyData = JSON.stringify(req.body);
-      proxyReq.setHeader('Content-Type', 'application/json');
-      proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
-      
-      // Write body and end request
-      proxyReq.write(bodyData);
-      proxyReq.end();
-      
-      // Prevent http-proxy-middleware from trying to pipe the original request stream
-      // since we've already consumed it with express.json()
-      req.pause();
-      req.unpipe(proxyReq);
     }
     
     // Log request
