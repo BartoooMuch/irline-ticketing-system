@@ -28,12 +28,12 @@ const logger = winston.createLogger({
   ],
 });
 
-// Service URLs
+// Service URLs - Production Render URLs with fallback
 const SERVICES = {
   flight: process.env.FLIGHT_SERVICE_URL || 'https://flight-service-rvlh.onrender.com',
-  milessmiles: process.env.MILESSMILES_SERVICE_URL || 'http://localhost:3002',
+  milessmiles: process.env.MILESSMILES_SERVICE_URL || 'https://milessmiles-service.onrender.com',
   notification: process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:3003',
-  ml: process.env.ML_SERVICE_URL || 'http://localhost:5000',
+  ml: process.env.ML_SERVICE_URL || 'https://ml-service-3cex.onrender.com',
 };
 
 // Rate limiting
@@ -70,11 +70,9 @@ app.use(cors({
   credentials: true,
 }));
 app.use(morgan('combined', { stream: { write: (message) => logger.info(message.trim()) } }));
-app.use(limiter);
-
-// Parse JSON body for all routes
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(limiter);
 
 // Manual proxy middleware using axios
 const proxyTo = (serviceKey) => async (req, res) => {
@@ -82,12 +80,15 @@ const proxyTo = (serviceKey) => async (req, res) => {
   const fullUrl = `${targetUrl}${req.path}`;
   
   try {
-    logger.info(`Proxying ${req.method} ${req.originalUrl} -> ${fullUrl}`);
+    logger.info(`Proxying ${req.method} ${req.path} -> ${fullUrl}`);
     
-    // Forward only necessary headers
-    const headers = {
-      'content-type': req.headers['content-type'] || 'application/json',
-    };
+    // Forward only safe headers
+    const headers = {};
+    
+    // Forward content-type if present
+    if (req.headers['content-type']) {
+      headers['content-type'] = req.headers['content-type'];
+    }
     
     // Forward auth headers if present
     if (req.headers.authorization) {
@@ -112,29 +113,38 @@ const proxyTo = (serviceKey) => async (req, res) => {
     // Forward body for POST/PUT/PATCH
     if (['POST', 'PUT', 'PATCH'].includes(req.method) && req.body) {
       axiosConfig.data = req.body;
+      logger.info(`Forwarding body:`, req.body);
     }
     
     const response = await axios(axiosConfig);
     
-    // Forward response
+    logger.info(`Response from ${serviceKey}: ${response.status}`);
+    
+    // Forward response status
     res.status(response.status);
     
-    // Forward only safe response headers
-    const safeHeaders = ['content-type', 'content-length', 'set-cookie'];
-    safeHeaders.forEach(key => {
-      if (response.headers[key]) {
-        res.setHeader(key, response.headers[key]);
-      }
-    });
+    // Forward response headers
+    if (response.headers['content-type']) {
+      res.setHeader('content-type', response.headers['content-type']);
+    }
+    if (response.headers['set-cookie']) {
+      res.setHeader('set-cookie', response.headers['set-cookie']);
+    }
     
+    // Send response
     res.send(response.data);
   } catch (error) {
-    logger.error(`Proxy error: ${error.message}`, { stack: error.stack });
+    logger.error(`Proxy error for ${serviceKey}:`, {
+      message: error.message,
+      code: error.code,
+      response: error.response?.data,
+    });
     res.status(502).json({
       success: false,
       error: {
         message: 'Service temporarily unavailable',
         code: 'SERVICE_UNAVAILABLE',
+        details: error.message,
       },
     });
   }

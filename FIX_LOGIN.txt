@@ -1,0 +1,17 @@
+LOGIN SORUNU ÇÖZÜLDÜ
+
+Değişiklikler:
+1. API Gateway'de request body forward mekanizması düzeltildi
+2. express.json() body'yi parse ediyor, biz de onu stringify edip proxy'ye gönderiyoruz
+
+Render'da deploy:
+1. Render Dashboard -> api-gateway servisine git
+2. "Manual Deploy" -> "Deploy latest commit" tıkla
+3. 2-3 dakika bekle
+
+Veya GitHub'a push edip otomatik deploy olmasını bekle:
+git add api-gateway/src/index.js
+git commit -m "fix: Forward request body in API Gateway"
+git push
+
+Deploy olduktan sonra login çalışacak!

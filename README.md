@@ -39,6 +39,10 @@ This project implements a Turkish Airlines-like ticketing system with the follow
 |---------|-----|
 | User Portal | `https://user-portal-xnjc.onrender.com` |
 | Admin Portal | `https://admin-portal-0z68.onrender.com` |
+| API Gateway | `https://api-gateway-qz1l.onrender.com` |
+| Flight Service | `https://flight-service-rvlh.onrender.com` |
+| MilesSmiles Service | `https://milessmiles-service.onrender.com` |
+| ML Service | `https://ml-service-3cex.onrender.com` |
 
 **Local Development URLs:**
 
