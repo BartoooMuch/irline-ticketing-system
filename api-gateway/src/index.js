@@ -165,17 +165,17 @@ app.get('/health', (req, res) => {
 });
 
 // Flight Service Routes
-app.all('/api/v1/flights*', proxyTo('flight'));
-app.all('/api/v1/tickets*', proxyTo('flight'));
-app.all('/api/v1/airports*', proxyTo('flight'));
+app.use('/api/v1/flights', proxyTo('flight'));
+app.use('/api/v1/tickets', proxyTo('flight'));
+app.use('/api/v1/airports', proxyTo('flight'));
 
 // MilesSmiles Service Routes
-app.all('/api/v1/auth*', authLimiter, proxyTo('milessmiles'));
-app.all('/api/v1/members*', proxyTo('milessmiles'));
-app.all('/api/v1/miles*', proxyTo('milessmiles'));
+app.use('/api/v1/auth', authLimiter, proxyTo('milessmiles'));
+app.use('/api/v1/members', proxyTo('milessmiles'));
+app.use('/api/v1/miles', proxyTo('milessmiles'));
 
 // ML Service Routes
-app.all('/api/v1/predict*', proxyTo('ml'));
+app.use('/api/v1/predict', proxyTo('ml'));
 
 // Service health endpoints
 app.get('/api/v1/services/health', async (req, res) => {
