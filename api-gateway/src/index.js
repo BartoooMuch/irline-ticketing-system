@@ -72,19 +72,46 @@ app.use(cors({
 app.use(morgan('combined', { stream: { write: (message) => logger.info(message.trim()) } }));
 app.use(limiter);
 
-// Don't parse body globally - let http-proxy-middleware handle it for proxy routes
-// Only parse for non-proxy routes if needed (health check, etc.)
-// This prevents stream conflicts when forwarding body to downstream services
+// Buffer raw body for proxy routes
+// This allows us to manually forward the body without stream conflicts
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/v1/')) {
+    // For API routes, buffer raw body for POST/PUT/PATCH
+    if (['POST', 'PUT', 'PATCH'].includes(req.method)) {
+      const chunks = [];
+      req.on('data', (chunk) => chunks.push(chunk));
+      req.on('end', () => {
+        req.rawBody = Buffer.concat(chunks);
+        next();
+      });
+      req.on('error', (err) => {
+        logger.error(`Error buffering body: ${err.message}`);
+        res.status(400).json({
+          success: false,
+          error: { message: 'Invalid request body', code: 'INVALID_BODY' },
+        });
+      });
+    } else {
+      // GET/HEAD/etc don't have body
+      req.rawBody = null;
+      next();
+    }
+  } else {
+    // For non-API routes, use normal JSON parsing
+    const jsonParser = express.json({ limit: '10mb' });
+    jsonParser(req, res, next);
+  }
+});
 
 // Proxy options factory
 const createProxyOptions = (target, pathRewrite = {}) => ({
   target,
   changeOrigin: true,
   pathRewrite,
-  // Don't parse body - forward raw stream
+  // Don't let http-proxy-middleware parse body
   bodyParser: false,
-  // Buffer request body so it can be forwarded
-  buffer: true,
+  // Don't buffer - we handle it manually
+  buffer: false,
   onError: (err, req, res) => {
     logger.error(`Proxy error: ${err.message}`);
     res.status(502).json({
@@ -105,6 +132,14 @@ const createProxyOptions = (target, pathRewrite = {}) => ({
     }
     if (req.headers['x-api-secret']) {
       proxyReq.setHeader('x-api-secret', req.headers['x-api-secret']);
+    }
+    
+    // Forward raw body if it exists
+    if (req.rawBody && req.rawBody.length > 0 && ['POST', 'PUT', 'PATCH'].includes(req.method)) {
+      proxyReq.setHeader('Content-Type', req.headers['content-type'] || 'application/json');
+      proxyReq.setHeader('Content-Length', req.rawBody.length);
+      proxyReq.write(req.rawBody);
+      proxyReq.end();
     }
     
     // Log request
