@@ -77,10 +77,10 @@ app.use(limiter);
 // Manual proxy middleware using axios
 const proxyTo = (serviceKey) => async (req, res) => {
   const targetUrl = SERVICES[serviceKey];
-  const fullUrl = `${targetUrl}${req.path}`;
+  const fullUrl = `${targetUrl}${req.originalUrl}`;
   
   try {
-    logger.info(`Proxying ${req.method} ${req.path} -> ${fullUrl}`);
+    logger.info(`Proxying ${req.method} ${req.originalUrl} -> ${fullUrl}`);
     
     // Forward only safe headers
     const headers = {};
