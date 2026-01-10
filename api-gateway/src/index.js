@@ -30,7 +30,7 @@ const logger = winston.createLogger({
 
 // Service URLs
 const SERVICES = {
-  flight: process.env.FLIGHT_SERVICE_URL || 'http://localhost:3001',
+  flight: process.env.FLIGHT_SERVICE_URL || 'https://flight-service-rvlh.onrender.com',
   milessmiles: process.env.MILESSMILES_SERVICE_URL || 'http://localhost:3002',
   notification: process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:3003',
   ml: process.env.ML_SERVICE_URL || 'http://localhost:5000',
@@ -84,14 +84,27 @@ const proxyTo = (serviceKey) => async (req, res) => {
   try {
     logger.info(`Proxying ${req.method} ${req.originalUrl} -> ${fullUrl}`);
     
+    // Forward only necessary headers
+    const headers = {
+      'content-type': req.headers['content-type'] || 'application/json',
+    };
+    
+    // Forward auth headers if present
+    if (req.headers.authorization) {
+      headers.authorization = req.headers.authorization;
+    }
+    if (req.headers['x-api-key']) {
+      headers['x-api-key'] = req.headers['x-api-key'];
+    }
+    if (req.headers['x-api-secret']) {
+      headers['x-api-secret'] = req.headers['x-api-secret'];
+    }
+    
     const axiosConfig = {
       method: req.method,
       url: fullUrl,
       params: req.query,
-      headers: {
-        ...req.headers,
-        host: new URL(targetUrl).host,
-      },
+      headers,
       timeout: 30000,
       validateStatus: () => true, // Accept any status
     };
@@ -105,12 +118,18 @@ const proxyTo = (serviceKey) => async (req, res) => {
     
     // Forward response
     res.status(response.status);
-    Object.keys(response.headers).forEach(key => {
-      res.setHeader(key, response.headers[key]);
+    
+    // Forward only safe response headers
+    const safeHeaders = ['content-type', 'content-length', 'set-cookie'];
+    safeHeaders.forEach(key => {
+      if (response.headers[key]) {
+        res.setHeader(key, response.headers[key]);
+      }
     });
+    
     res.send(response.data);
   } catch (error) {
-    logger.error(`Proxy error: ${error.message}`);
+    logger.error(`Proxy error: ${error.message}`, { stack: error.stack });
     res.status(502).json({
       success: false,
       error: {
