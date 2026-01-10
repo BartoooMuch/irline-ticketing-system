@@ -63,6 +63,7 @@ const authLimiter = rateLimit({
 });
 
 // Middleware
+app.set('trust proxy', 1); // Trust proxy for rate limiting on Render
 app.use(helmet());
 app.use(cors({
   origin: process.env.ALLOWED_ORIGINS?.split(',') || '*',
@@ -111,6 +112,7 @@ const createProxyOptions = (target, pathRewrite = {}) => ({
       proxyReq.setHeader('Content-Type', 'application/json');
       proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
       proxyReq.write(bodyData);
+      proxyReq.end(); // End the request after writing body
     }
     
     // Log request
