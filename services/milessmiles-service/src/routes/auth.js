@@ -90,10 +90,21 @@ router.post(
       // If Cognito user exists but DB row doesn't (common in production if signup didn't write DB),
       // create a minimal member record so the portals can function.
       if (!member) {
-        const memberNumberResult = await req.db.query(
-          `SELECT generate_member_number() AS member_number`
-        );
-        const memberNumber = memberNumberResult.rows[0]?.member_number;
+        let memberNumber;
+        try {
+          const memberNumberResult = await req.db.query(
+            `SELECT generate_member_number() AS member_number`
+          );
+          memberNumber = memberNumberResult.rows[0]?.member_number;
+        } catch (e) {
+          // Fallback if DB function isn't available
+          const result = await req.db.query(
+            `SELECT COALESCE(MAX(SUBSTRING(member_number FROM 3)::INTEGER), 0) + 1 as next_num
+             FROM miles_smiles_members`
+          );
+          const nextNum = result.rows[0]?.next_num || 1;
+          memberNumber = `MS${nextNum.toString().padStart(10, '0')}`;
+        }
 
         const insertResult = await req.db.query(
           `INSERT INTO miles_smiles_members (
