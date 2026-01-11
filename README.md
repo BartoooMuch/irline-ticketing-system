@@ -531,15 +531,29 @@ All core functionality has been tested and verified:
 
 ## 📹 Demo Video
 
-**Video Link**: [To be added - 5-minute project demo](https://your-video-link.com)
+**Video Link**: [YouTube/Google Drive link buraya ekle]
 
-**Demo Script**: See [DEMO_VIDEO_SCRIPT.md](./DEMO_VIDEO_SCRIPT.md) for detailed script and recording guide.
+**Demo Content** (4-6 minutes):
+1. **Architecture Overview** - Microservices architecture, API Gateway, deployed services
+2. **User Portal Demo** - Login → Flight Search → View Results
+3. **Admin Portal Demo** - Login → Add Flight with ML Price Prediction → Create Flight
+4. **End-to-End Flow** - Verify added flight appears in User Portal search
+5. **Miles&Smiles** - Profile view with miles balance (optional)
 
-**Quick Outline**:
-1. Introduction & Architecture Overview (1 min)
-2. User Portal Demo: Registration → Search → Book → Miles (2 min)
-3. Admin Portal Demo: Login → Add Flight (ML) → Manage Flights (2 min)
-4. Technical Highlights & Conclusion (1 min)
+### 🧪 Quick Test
+
+**Test Credentials:**
+- User Portal: `bartu_1999@windowslive.com` / `[Your Password]`
+- Admin Portal: Same credentials (user auto-created as member)
+
+**Note**: On Render free tier, services may sleep after 15 minutes of inactivity. First request may take 20-40 seconds to wake up the service. Refresh if needed.
+
+### ✅ Test Checklist
+- [x] User Portal Login
+- [x] Flight Search (IST → ADB)
+- [x] Admin Portal Login
+- [x] Add Flight with ML Price Prediction
+- [x] View added flight in User Portal search results
 
 ---
 
