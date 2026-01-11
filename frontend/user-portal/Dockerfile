@@ -12,8 +12,14 @@ RUN npm run build
 # Production stage
 FROM nginx:alpine
 
+# Copy built files
 COPY --from=builder /app/dist /usr/share/nginx/html
+
+# Copy nginx config
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# Create a simple health check file
+RUN echo "OK" > /usr/share/nginx/html/health.txt
 
 EXPOSE 80
 
