@@ -83,7 +83,9 @@ const proxyTo = (serviceKey) => async (req, res) => {
     logger.info(`Proxying ${req.method} ${req.originalUrl} -> ${fullUrl}`);
     
     // Forward only safe headers
-    const headers = {};
+    const headers = {
+      accept: req.headers.accept || 'application/json, text/plain, */*',
+    };
     
     // Forward content-type if present
     if (req.headers['content-type']) {
@@ -104,9 +106,12 @@ const proxyTo = (serviceKey) => async (req, res) => {
     const axiosConfig = {
       method: req.method,
       url: fullUrl,
-      params: req.query,
       headers,
-      timeout: 30000,
+      timeout: 60000,
+      responseType: 'arraybuffer',
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity,
+      decompress: true,
       validateStatus: () => true, // Accept any status
     };
     
@@ -132,7 +137,7 @@ const proxyTo = (serviceKey) => async (req, res) => {
     }
     
     // Send response
-    res.send(response.data);
+    res.send(Buffer.from(response.data));
   } catch (error) {
     logger.error(`Proxy error for ${serviceKey}:`, {
       message: error.message,
