@@ -531,7 +531,7 @@ All core functionality has been tested and verified:
 
 ## 📹 Demo Video
 
-**Video Link**: [YouTube/Google Drive link buraya ekle]
+**Video Link**: [SE 4458 Final Project - Airline Ticketing System Demo](https://youtu.be/drJr0I-4KMs)
 
 **Demo Content** (4-6 minutes):
 1. **Architecture Overview** - Microservices architecture, API Gateway, deployed services
