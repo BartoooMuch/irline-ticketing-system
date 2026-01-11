@@ -3,14 +3,27 @@ const jwksClient = require('jwks-rsa');
 const crypto = require('crypto');
 const logger = require('../utils/logger');
 
-// JWKS client for AWS Cognito
-const client = jwksClient({
-  jwksUri: `https://cognito-idp.${process.env.AWS_REGION}.amazonaws.com/${process.env.AWS_COGNITO_USER_POOL_ID}/.well-known/jwks.json`,
-  cache: true,
-  cacheMaxAge: 600000,
-});
+// JWKS client cache by issuer (prevents env mismatch issues across services)
+const jwksClientsByIssuer = new Map();
+const getJwksClientForIssuer = (issuer) => {
+  const key = issuer || 'default';
+  if (jwksClientsByIssuer.has(key)) return jwksClientsByIssuer.get(key);
 
-const getKey = (header, callback) => {
+  const jwksUri = issuer
+    ? `${issuer}/.well-known/jwks.json`
+    : `https://cognito-idp.${process.env.AWS_REGION}.amazonaws.com/${process.env.AWS_COGNITO_USER_POOL_ID}/.well-known/jwks.json`;
+
+  const client = jwksClient({
+    jwksUri,
+    cache: true,
+    cacheMaxAge: 600000,
+  });
+  jwksClientsByIssuer.set(key, client);
+  return client;
+};
+
+const makeGetKey = (issuer) => (header, callback) => {
+  const client = getJwksClientForIssuer(issuer);
   client.getSigningKey(header.kid, (err, key) => {
     if (err) {
       logger.error('Error getting signing key:', err);
@@ -36,12 +49,14 @@ const verifyToken = (req, res, next) => {
   }
 
   const token = authHeader.split(' ')[1];
+  const decoded = jwt.decode(token, { complete: true })?.payload || {};
+  const issuer = decoded.iss || `https://cognito-idp.${process.env.AWS_REGION}.amazonaws.com/${process.env.AWS_COGNITO_USER_POOL_ID}`;
 
   jwt.verify(
     token,
-    getKey,
+    makeGetKey(issuer),
     {
-      issuer: `https://cognito-idp.${process.env.AWS_REGION}.amazonaws.com/${process.env.AWS_COGNITO_USER_POOL_ID}`,
+      issuer,
       algorithms: ['RS256'],
     },
     (err, decoded) => {
@@ -156,12 +171,14 @@ const optionalAuth = (req, res, next) => {
   }
 
   const token = authHeader.split(' ')[1];
+  const decoded = jwt.decode(token, { complete: true })?.payload || {};
+  const issuer = decoded.iss || `https://cognito-idp.${process.env.AWS_REGION}.amazonaws.com/${process.env.AWS_COGNITO_USER_POOL_ID}`;
 
   jwt.verify(
     token,
-    getKey,
+    makeGetKey(issuer),
     {
-      issuer: `https://cognito-idp.${process.env.AWS_REGION}.amazonaws.com/${process.env.AWS_COGNITO_USER_POOL_ID}`,
+      issuer,
       algorithms: ['RS256'],
     },
     (err, decoded) => {
