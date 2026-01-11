@@ -21,7 +21,8 @@ function Login() {
       const { tokens, member } = response.data.data
       
       // Check if user is admin (in production, check Cognito groups)
-      login({ email, ...member }, tokens.accessToken)
+      // member can be null if user exists in Cognito but not yet in DB
+      login({ email, ...(member || {}) }, tokens.accessToken)
       toast.success('Welcome back!')
     } catch (err) {
       setError(err.response?.data?.error?.message || 'Login failed')

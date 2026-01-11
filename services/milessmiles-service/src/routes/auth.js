@@ -1,6 +1,8 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
 const { CognitoIdentityProviderClient, InitiateAuthCommand, GlobalSignOutCommand } = require('@aws-sdk/client-cognito-identity-provider');
+const jwt = require('jsonwebtoken');
+const { v4: uuidv4 } = require('uuid');
 const { verifyToken } = require('../middleware/auth');
 const logger = require('../utils/logger');
 
@@ -64,17 +66,71 @@ router.post(
         });
       }
 
+      // Decode ID token (no verification needed here; JWT signature is verified later by services when used)
+      const decodedIdToken = response.AuthenticationResult.IdToken
+        ? jwt.decode(response.AuthenticationResult.IdToken)
+        : null;
+      const cognitoUserId = decodedIdToken?.sub || null;
+      const tokenEmail = decodedIdToken?.email || email;
+      const firstName = decodedIdToken?.given_name || 'User';
+      const lastName = decodedIdToken?.family_name || 'User';
+
       // Get member details
-      const memberResult = await req.db.query(
+      let memberResult = await req.db.query(
         `SELECT 
-          id, member_number, email, first_name, last_name, title,
+          id, cognito_user_id, member_number, email, first_name, last_name, title,
           total_miles, available_miles, tier
         FROM miles_smiles_members
         WHERE email = $1`,
-        [email]
+        [tokenEmail]
       );
 
-      const member = memberResult.rows[0] || null;
+      let member = memberResult.rows[0] || null;
+
+      // If Cognito user exists but DB row doesn't (common in production if signup didn't write DB),
+      // create a minimal member record so the portals can function.
+      if (!member) {
+        const memberNumberResult = await req.db.query(
+          `SELECT generate_member_number() AS member_number`
+        );
+        const memberNumber = memberNumberResult.rows[0]?.member_number;
+
+        const insertResult = await req.db.query(
+          `INSERT INTO miles_smiles_members (
+            id, cognito_user_id, member_number, email, first_name, last_name, title,
+            total_miles, available_miles, tier
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, 0, 0, 'CLASSIC')
+          RETURNING 
+            id, cognito_user_id, member_number, email, first_name, last_name, title,
+            total_miles, available_miles, tier`,
+          [
+            uuidv4(),
+            cognitoUserId,
+            memberNumber,
+            tokenEmail,
+            firstName,
+            lastName,
+            null,
+          ]
+        );
+
+        member = insertResult.rows[0] || null;
+      } else if (!member.cognito_user_id && cognitoUserId) {
+        // Backfill cognito_user_id if missing
+        await req.db.query(
+          `UPDATE miles_smiles_members SET cognito_user_id = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
+          [cognitoUserId, member.id]
+        );
+        memberResult = await req.db.query(
+          `SELECT 
+            id, cognito_user_id, member_number, email, first_name, last_name, title,
+            total_miles, available_miles, tier
+          FROM miles_smiles_members
+          WHERE id = $1`,
+          [member.id]
+        );
+        member = memberResult.rows[0] || member;
+      }
 
       logger.info(`User logged in: ${email}`);
 
