@@ -17,6 +17,8 @@ A comprehensive airline ticketing system built with microservices architecture, 
 - [Setup & Installation](#setup--installation)
 - [Deployment](#deployment)
 - [Assumptions](#assumptions)
+- [Issues Encountered & Solutions](#issues-encountered--solutions)
+- [Demo Video](#demo-video)
 - [Team](#team)
 
 ---
