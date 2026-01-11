@@ -130,11 +130,11 @@ def train_model():
         except Exception as e:
             logger.warning(f"Failed to load model: {e}")
     
-    # Generate synthetic training data
-    logger.info("Training new model with synthetic data...")
+    # Generate synthetic training data (keep it lightweight for small Render instances)
+    logger.info("Training new model with synthetic data (lightweight)...")
     
     np.random.seed(42)
-    n_samples = 10000
+    n_samples = 2500
     
     # Generate features
     durations = np.random.randint(30, 720, n_samples)  # 30 mins to 12 hours
@@ -181,10 +181,10 @@ def train_model():
     
     # Train model
     model = RandomForestRegressor(
-        n_estimators=100,
-        max_depth=10,
+        n_estimators=60,
+        max_depth=8,
         random_state=42,
-        n_jobs=-1
+        n_jobs=1
     )
     model.fit(X, y)
     
@@ -205,8 +205,7 @@ def health():
     })
 
 
-@app.route('/predict', methods=['POST'])
-def predict():
+def _predict_impl():
     """Predict flight price"""
     try:
         data = request.get_json()
@@ -224,10 +223,28 @@ def predict():
         X = pd.DataFrame([features])
         
         # Make prediction
+        predicted_price = None
         if model is None:
-            train_model()
-        
-        predicted_price = model.predict(X)[0]
+            try:
+                train_model()
+            except Exception as e:
+                logger.warning(f"Model training failed; falling back to heuristic pricing: {e}")
+                predicted_price = None
+
+        if predicted_price is None:
+            if model is not None:
+                predicted_price = model.predict(X)[0]
+            else:
+                # Heuristic fallback (always works)
+                distance = features['distance']
+                duration = features['duration_minutes']
+                predicted_price = 40 + (distance * 0.006) + (duration * 0.12)
+                if features['is_peak_season']:
+                    predicted_price += 25
+                if features['is_weekend']:
+                    predicted_price += 12
+                if features['days_until_departure'] < 7:
+                    predicted_price += (7 - features['days_until_departure']) * 2
         
         # Adjust for domestic flights (manual override for better pricing)
         from_airport = data.get('fromAirport', '').upper()
@@ -275,6 +292,14 @@ def predict():
             'error': str(e)
         }), 500
 
+@app.route('/predict', methods=['POST'])
+def predict():
+    return _predict_impl()
+
+# Alias for API Gateway route (/api/v1/predict -> ML service)
+@app.route('/api/v1/predict', methods=['POST'])
+def predict_v1():
+    return _predict_impl()
 
 @app.route('/predict/batch', methods=['POST'])
 def predict_batch():
@@ -358,9 +383,8 @@ def retrain():
         }), 500
 
 
-# Initialize model on startup
-with app.app_context():
-    train_model()
+# IMPORTANT: do not train on startup on Render (cold start + small instances).
+# We train/load lazily on first request.
 
 
 if __name__ == '__main__':
