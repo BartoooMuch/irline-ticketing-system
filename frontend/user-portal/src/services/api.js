@@ -36,8 +36,11 @@ export const getFlightById = (id) =>
   api.get(`/flights/${id}`)
 
 // Airports
-export const getAirports = () =>
-  api.get('/airports')
+export const getAirports = (params) => {
+  // Avoid pulling the entire airports table (can be large and cause 502 on free tiers).
+  const safeParams = params ?? { country: 'Turkey' }
+  return api.get('/airports', { params: safeParams })
+}
 
 export const searchAirports = (q) =>
   api.get('/airports/search/autocomplete', { params: { q } })
