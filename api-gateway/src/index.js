@@ -28,6 +28,14 @@ const logger = winston.createLogger({
   ],
 });
 
+// Prevent hard crashes from killing the process (Render will show 502 if the process exits)
+process.on('unhandledRejection', (reason) => {
+  logger.error('Unhandled Rejection', { reason: reason?.message || reason, stack: reason?.stack });
+});
+process.on('uncaughtException', (err) => {
+  logger.error('Uncaught Exception', { message: err?.message, stack: err?.stack });
+});
+
 // Service URLs - Production Render URLs with fallback
 const SERVICES = {
   flight: process.env.FLIGHT_SERVICE_URL || 'https://flight-service-rvlh.onrender.com',
@@ -108,10 +116,7 @@ const proxyTo = (serviceKey) => async (req, res) => {
       url: fullUrl,
       headers,
       timeout: 60000,
-      responseType: 'arraybuffer',
-      maxContentLength: Infinity,
-      maxBodyLength: Infinity,
-      decompress: true,
+      responseType: 'stream',
       validateStatus: () => true, // Accept any status
     };
     
@@ -136,8 +141,16 @@ const proxyTo = (serviceKey) => async (req, res) => {
       res.setHeader('set-cookie', response.headers['set-cookie']);
     }
     
-    // Send response
-    res.send(Buffer.from(response.data));
+    // Stream response
+    response.data.on('error', (err) => {
+      logger.error(`Upstream stream error from ${serviceKey}:`, { message: err.message, stack: err.stack });
+      if (!res.headersSent) {
+        res.status(502).end();
+      } else {
+        res.end();
+      }
+    });
+    response.data.pipe(res);
   } catch (error) {
     logger.error(`Proxy error for ${serviceKey}:`, {
       message: error.message,
